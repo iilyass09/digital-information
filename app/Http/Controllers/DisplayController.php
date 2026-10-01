@@ -52,7 +52,10 @@ class DisplayController extends Controller
         $assignments = LiveHost::query()
             ->where('is_active', true)
             ->whereDate('date', $today)
-            ->with('host:id,name,photo')
+            ->with([
+                'host:id,name,photo',
+                'liveStreamLink' => fn ($query) => $query->where('is_active', true)->select(['id', 'name', 'url', 'logo']),
+            ])
             ->get()
             ->keyBy('live_schedule_id');
 
@@ -68,7 +71,9 @@ class DisplayController extends Controller
                 'name' => $channel->name,
                 'logo_url' => $channel->logo ? Storage::disk('public')->url($channel->logo) : null,
                 'slots' => $channel->liveSchedules->map(function (LiveSchedule $schedule) use ($assignments): array {
-                    $host = $assignments->get($schedule->id)?->host;
+                    $assignment = $assignments->get($schedule->id);
+                    $host = $assignment?->host;
+                    $link = $assignment?->liveStreamLink;
 
                     return [
                         'id' => $schedule->id,
@@ -76,6 +81,9 @@ class DisplayController extends Controller
                         'end_time' => substr((string) $schedule->end_time, 0, 5),
                         'host_name' => $host?->name,
                         'host_photo' => $host?->photo ? Storage::disk('public')->url($host->photo) : null,
+                        'stream_link_name' => $link?->name,
+                        'stream_link_url' => $link?->url,
+                        'stream_link_logo_url' => $link?->logo ? Storage::disk('public')->url($link->logo) : null,
                     ];
                 })->all(),
             ]);

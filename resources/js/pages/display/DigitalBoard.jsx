@@ -1,9 +1,100 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import QRCode from 'qrcode';
 import { getDisplayData } from '../../services/api.js';
 import './DigitalBoard.css';
 
 const SLIDE_INTERVAL = 5_000;
 const REFRESH_INTERVAL = 45_000;
+const CLOCK_INTERVAL = 15_000;
+const NOTICE_DISMISS = 8_000;
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+const WIB_CLOCK = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+});
+
+function timeToMinutes(value) {
+    const match = /^(\d{1,2}):(\d{2})/.exec(String(value ?? ''));
+
+    if (!match) return null;
+
+    return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function wibMinutes(date) {
+    const parts = WIB_CLOCK.formatToParts(date);
+    const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? 0);
+    const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? 0);
+
+    return hour * 60 + minute;
+}
+
+function wibClockLabel(date) {
+    return WIB_CLOCK.format(date);
+}
+
+function msUntilNextTuesday(nowMs) {
+    const wib = new Date(nowMs + WIB_OFFSET_MS);
+    const day = wib.getUTCDay();
+    const minutesNow = wib.getUTCHours() * 60 + wib.getUTCMinutes();
+    let add = (2 - day + 7) % 7;
+
+    if (add === 0 && minutesNow >= 540) {
+        add = 7;
+    }
+
+    const target = Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate() + add, 9, 0, 0) - WIB_OFFSET_MS;
+
+    return Math.max(0, target - nowMs);
+}
+
+function countdownParts(ms) {
+    const totalMinutes = Math.floor(ms / 60000);
+
+    return {
+        days: Math.floor(totalMinutes / 1440),
+        hours: Math.floor((totalMinutes % 1440) / 60),
+        minutes: totalMinutes % 60,
+    };
+}
+
+function slotPhase(slot, date = new Date()) {
+    const start = timeToMinutes(slot.start_time);
+    const end = timeToMinutes(slot.end_time);
+
+    if (start === null || end === null) return 'unknown';
+
+    const minutes = wibMinutes(date);
+
+    if (minutes < start) return 'upcoming';
+    if (minutes >= end) return 'ended';
+
+    return 'live';
+}
+
+function useNowTick(interval = CLOCK_INTERVAL) {
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        const timer = window.setInterval(() => setNow(Date.now()), interval);
+
+        return () => window.clearInterval(timer);
+    }, [interval]);
+
+    return now;
+}
+
+function LockIcon() {
+    return (
+        <svg className="lock-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M7.5 10V7.5a4.5 4.5 0 0 1 9 0V10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <rect x="4.5" y="10" width="15" height="10" rx="2.5" fill="none" stroke="currentColor" strokeWidth="2" />
+        </svg>
+    );
+}
 
 function normalizeDisplayData(payload) {
     if (!payload || payload.success !== true || !payload.data) {
@@ -117,6 +208,40 @@ function buildFireworks() {
 
 const FIREWORKS = buildFireworks();
 
+const ACHIEVEMENT_SPARKLES = Array.from({ length: 18 }, (_, i) => ({
+    left: ((i * 53) % 92) + 4,
+    top: ((i * 37) % 84) + 8,
+    size: 0.35 + ((i * 13) % 5) / 10,
+    delay: -((i * 210) % 260) / 100,
+    duration: 2.2 + ((i * 17) % 26) / 10,
+}));
+
+const BALLOON_COLORS = ['#ff6b9d', '#ffd166', '#6bd7ff', '#b388ff', '#63e6be', '#ff9f6b', '#f78fb3', '#8ce99a'];
+
+const BALLOONS = Array.from({ length: 9 }, (_, i) => ({
+    left: ((i * 23) % 88) + 5,
+    color: BALLOON_COLORS[i % BALLOON_COLORS.length],
+    delay: -((i * 320) % 900) / 100,
+    duration: 7.5 + ((i * 19) % 45) / 10,
+    scale: 0.7 + ((i * 11) % 7) / 10,
+}));
+
+const LIVE_DUST = Array.from({ length: 16 }, (_, i) => ({
+    left: ((i * 29) % 94) + 3,
+    size: 0.12 + ((i * 7) % 5) / 20,
+    delay: -((i * 260) % 1400) / 100,
+    duration: 9 + ((i * 23) % 70) / 10,
+}));
+
+const LIVE_EQ = [55, 85, 40, 100, 62, 78, 46, 92];
+
+const AUDIENCE = Array.from({ length: 11 }, (_, i) => ({
+    left: 3 + i * 8.6 + (i % 2) * 2.2,
+    w: 0.9 + ((i * 13) % 6) / 10,
+    delay: -((i * 170) % 320) / 100,
+    duration: 2.8 + ((i * 19) % 24) / 10,
+}));
+
 function ConfettiRain() {
     return (
         <div className="confetti-rain" aria-hidden="true">
@@ -167,10 +292,29 @@ function Fireworks() {
     );
 }
 
-function AchievementSlide({ achievement }) {
+function AchievementSlide({ achievement, brandLogoUrl }) {
     return (
         <article className="display-slide achievement-slide">
+            <BoardBrand logoUrl={brandLogoUrl} />
             <ConfettiRain />
+            <div className="achievement-gold" aria-hidden="true">
+                <span className="achievement-rays" />
+                <span className="achievement-beam" />
+                {ACHIEVEMENT_SPARKLES.map((sparkle, i) => (
+                    <span
+                        key={i}
+                        className="achievement-sparkle"
+                        style={{
+                            left: `${sparkle.left}%`,
+                            top: `${sparkle.top}%`,
+                            width: `${sparkle.size}vmax`,
+                            height: `${sparkle.size}vmax`,
+                            animationDelay: `${sparkle.delay}s`,
+                            animationDuration: `${sparkle.duration}s`,
+                        }}
+                    />
+                ))}
+            </div>
             <div className="achievement-paper">
                 <span className="achievement-paper-frame" aria-hidden="true" />
                 <span className="achievement-corner achievement-corner-tl" aria-hidden="true" />
@@ -196,6 +340,7 @@ function AchievementSlide({ achievement }) {
                     {achievement.division && <p className="achievement-division">Divisi {achievement.division}</p>}
                 </div>
             </div>
+            <span className="achievement-flash" aria-hidden="true" />
         </article>
     );
 }
@@ -214,6 +359,15 @@ function ChannelLogo({ channel }) {
     return <img className="channel-logo" src={channel.logo_url} alt={`Logo ${channel.name}`} onError={() => setHasError(true)} />;
 }
 
+function BoardBrand({ logoUrl }) {
+    return (
+        <div className="board-brand">
+            <ChannelLogo channel={{ name: 'Johen PUBG', logo_url: logoUrl }} />
+            <span className="channel-name">Johen Gaming</span>
+        </div>
+    );
+}
+
 function HostPhoto({ host }) {
     const [hasError, setHasError] = useState(false);
     const initials = (host.host_name || '').trim().split(/\s+/).map((word) => word[0] || '').slice(0, 2).join('').toUpperCase();
@@ -229,26 +383,165 @@ function HostPhoto({ host }) {
     return <img className="host-photo" src={host.host_photo} alt={`Foto ${host.host_name}`} onError={() => setHasError(true)} />;
 }
 
-function LiveHostsSlide({ channel }) {
+function StreamLinkLabel({ slot, phase, onBlocked }) {
+    const [logoFailed, setLogoFailed] = useState(false);
+    const url = slot.stream_link_url;
+    const logo = slot.stream_link_logo_url;
+
+    useEffect(() => {
+        setLogoFailed(false);
+    }, [logo]);
+
+    if (!url) return null;
+
+    const logoNode = logo && !logoFailed
+        ? <img className="stream-link-logo" src={logo} alt="" onError={() => setLogoFailed(true)} />
+        : null;
+
+    if (phase === 'live') {
+        return (
+            <a className="stream-link" href={url} target="_blank" rel="noopener noreferrer" onClick={(event) => onBlocked(slot, event)}>
+                {logoNode}
+                <span className="stream-link-text">Link Live Tiktok</span>
+            </a>
+        );
+    }
+
+    return (
+        <button type="button" className="stream-link is-locked" onClick={(event) => onBlocked(slot, event)}>
+            {logoNode}
+            <span className="stream-link-badge">{phase === 'ended' ? 'Sudah berakhir' : 'Belum mulai'}</span>
+        </button>
+    );
+}
+
+function StreamQr({ slot, phase, onBlocked }) {
+    const [qrCode, setQrCode] = useState('');
+    const url = slot.stream_link_url;
+
+    useEffect(() => {
+        let cancelled = false;
+        setQrCode('');
+
+        if (!url || phase !== 'live') return undefined;
+
+        QRCode.toDataURL(url, { width: 512, margin: 1, errorCorrectionLevel: 'M' })
+            .then((dataUrl) => {
+                if (!cancelled) setQrCode(dataUrl);
+            })
+            .catch(() => {
+                if (!cancelled) setQrCode('');
+            });
+
+        return () => { cancelled = true; };
+    }, [url, phase]);
+
+    if (!url) return null;
+
+    if (phase !== 'live') {
+        return (
+            <button type="button" className="stream-qr stream-qr-locked" onClick={(event) => onBlocked(slot, event)}>
+                <span className="stream-qr-lock"><LockIcon /></span>
+                <span className="stream-qr-locked-text">{phase === 'ended' ? 'Sudah berakhir' : 'Belum mulai'}</span>
+            </button>
+        );
+    }
+
+    if (!qrCode) return null;
+
+    return <img className="stream-qr" src={qrCode} alt={`QR Code ${slot.stream_link_name || 'link streaming'}`} />;
+}
+
+function ScheduleNotice({ notice, now, onClose }) {
+    if (!notice) return null;
+
+    const { slot, phase } = notice;
+    const title = phase === 'ended' ? 'Jadwal sudah berakhir' : 'Jadwal belum mulai';
+    const time = wibClockLabel(now);
+
+    return (
+        <div className="schedule-notice" role="alertdialog" aria-modal="true" aria-labelledby="schedule-notice-title" onClick={onClose}>
+            <div className="schedule-notice-card" onClick={(event) => event.stopPropagation()}>
+                <span className="schedule-notice-mark"><LockIcon /></span>
+                <h2 id="schedule-notice-title">{title}</h2>
+                <p>
+                    Link &amp; QR untuk <strong>{slot.host_name || 'host ini'}</strong> hanya aktif pada sesi{' '}
+                    <strong>{slot.start_time} – {slot.end_time}</strong>.
+                </p>
+                <p className="schedule-notice-now">Sekarang pukul {time} WIB.</p>
+                <button type="button" className="schedule-notice-close" onClick={onClose}>Mengerti</button>
+            </div>
+        </div>
+    );
+}
+
+function LiveHostsSlide({ channel, now, onBlocked }) {
     return (
         <article className="display-slide live-slide">
+            <div className="live-stage" aria-hidden="true">
+                <span className="live-lamp live-lamp-left" />
+                <span className="live-lamp live-lamp-right" />
+                <span className="live-beam live-beam-left" />
+                <span className="live-beam live-beam-right" />
+            </div>
+            <div className="live-dust" aria-hidden="true">
+                {LIVE_DUST.map((mote, i) => (
+                    <span
+                        key={i}
+                        className="live-dust-mote"
+                        style={{
+                            left: `${mote.left}%`,
+                            '--s': `${mote.size}rem`,
+                            '--dur': `${mote.duration}s`,
+                            '--delay': `${mote.delay}s`,
+                        }}
+                    />
+                ))}
+            </div>
             <header className="slide-heading live-heading">
                 <div className="live-brand">
                     <ChannelLogo channel={channel} />
                     <span className="channel-name">{channel.name}</span>
                 </div>
-                <span className="slide-kicker">JADWAL HOST LIVE</span>
+                <div className="live-heading-side">
+                    <span className="slide-kicker">JADWAL HOST LIVE</span>
+                    <span className="live-eq" aria-hidden="true">
+                        {LIVE_EQ.map((h, i) => (
+                            <span
+                                key={i}
+                                className="live-eq-bar"
+                                style={{
+                                    height: `${h}%`,
+                                    animationDelay: `${(i * 0.13).toFixed(2)}s`,
+                                    animationDuration: `${(0.62 + (i % 4) * 0.14).toFixed(2)}s`,
+                                }}
+                            />
+                        ))}
+                    </span>
+                </div>
             </header>
             <div className="host-grid">
-                {channel.slots.map((slot) => (
-                    <div key={slot.id} className={slot.host_name ? 'host-card' : 'host-card is-unassigned'}>
-                        <div className="host-card-photo"><HostPhoto host={slot} /></div>
-                        <div className="host-card-meta">
-                            <p className="host-card-name">{slot.host_name || 'Belum ditentukan'}</p>
-                            <time className="host-card-time">{slot.start_time} – {slot.end_time}</time>
+                {channel.slots.map((slot) => {
+                    const phase = slotPhase(slot, now);
+                    const isLive = phase === 'live';
+                    const cardClass = ['host-card', slot.host_name ? '' : 'is-unassigned', isLive ? 'is-live' : ''].filter(Boolean).join(' ');
+
+                    return (
+                        <div key={slot.id} className={cardClass}>
+                            {isLive && <span className="host-live-signal" aria-hidden="true" />}
+                            <div className="host-card-photo"><HostPhoto host={slot} /></div>
+                            <div className="host-card-meta">
+                                <p className="host-card-name">
+                                    <span className="host-card-name-text">{slot.host_name || 'Belum ditentukan'}</span>
+                                    {isLive && <span className="host-card-live">Live</span>}
+                                </p>
+                                <time className="host-card-time">{slot.start_time} – {slot.end_time}</time>
+                                <StreamLinkLabel slot={slot} phase={phase} onBlocked={onBlocked} />
+                            </div>
+                            <StreamQr slot={slot} phase={phase} onBlocked={onBlocked} />
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </article>
     );
@@ -269,13 +562,56 @@ function MeetingPhoto({ meeting }) {
     return <img className="meeting-photo" src={meeting.photo_url} alt={`Foto ${meeting.name}`} onError={() => setHasError(true)} />;
 }
 
-function WeeklyMeetingSlide({ meetings }) {
+function WeeklyMeetingSlide({ meetings, now, brandLogoUrl }) {
+    const remaining = countdownParts(msUntilNextTuesday(now ? now.getTime() : Date.now()));
+    const countdownText = remaining.days > 0
+        ? `${remaining.days} hari ${remaining.hours} jam ${remaining.minutes} menit`
+        : remaining.hours > 0
+            ? `${remaining.hours} jam ${remaining.minutes} menit`
+            : `${remaining.minutes} menit`;
+
     return (
         <article className="display-slide meeting-slide">
+            <BoardBrand logoUrl={brandLogoUrl} />
+            <div className="meeting-spotlights" aria-hidden="true">
+                <span className="meeting-lamp meeting-lamp-left" />
+                <span className="meeting-lamp meeting-lamp-right" />
+                <span className="meeting-beam meeting-beam-left" />
+                <span className="meeting-beam meeting-beam-right" />
+            </div>
+            <div className="meeting-projection" aria-hidden="true">
+                <span className="meeting-screen" />
+                <span className="meeting-projector" />
+                <span className="meeting-projector-beam" />
+            </div>
+            <div className="meeting-audience" aria-hidden="true">
+                {AUDIENCE.map((figure, i) => (
+                    <span
+                        key={i}
+                        className="meeting-audience-figure"
+                        style={{
+                            left: `${figure.left}%`,
+                            '--w': figure.w,
+                            '--dur': `${figure.duration}s`,
+                            '--delay': `${figure.delay}s`,
+                        }}
+                    />
+                ))}
+            </div>
+            <div className="meeting-podium" aria-hidden="true"><span className="meeting-mic" /></div>
+            <div className="meeting-curtains" aria-hidden="true">
+                <span className="meeting-curtain meeting-curtain-left" />
+                <span className="meeting-curtain meeting-curtain-right" />
+            </div>
             <header className="meeting-head">
-                <span className="slide-kicker">WEEKLY MEETING</span>
+                <span className="slide-kicker meeting-kicker">WEEKLY MEETING</span>
                 <h1>Jadwal Presentasi Weekly Meeting</h1>
                 <p className="meeting-day">Selasa Berikutnya</p>
+                <p className="meeting-countdown">
+                    <span className="meeting-countdown-dot" aria-hidden="true" />
+                    <span className="meeting-countdown-label">Mulai dalam</span>
+                    <strong className="meeting-countdown-time">{countdownText}</strong>
+                </p>
             </header>
             <div className="meeting-row">
                 {meetings.map((meeting) => (
@@ -289,21 +625,40 @@ function WeeklyMeetingSlide({ meetings }) {
     );
 }
 
-function BirthdaySlide({ birthday }) {
+function BirthdaySlide({ birthday, brandLogoUrl }) {
     const dateLabel = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long' }).format(new Date(`${birthday.birth_date}T00:00:00`));
 
     return (
 <article className="display-slide birthday-slide">
+            <BoardBrand logoUrl={brandLogoUrl} />
             <div className="birthday-orbit birthday-orbit-one" aria-hidden="true" />
             <div className="birthday-orbit birthday-orbit-two" aria-hidden="true" />
             <ConfettiRain />
             <Fireworks />
-            <span className="slide-kicker">HARI ULANG TAHUN</span>
+            <div className="birthday-party" aria-hidden="true">
+                <span className="birthday-rays" />
+                {BALLOONS.map((balloon, i) => (
+                    <span
+                        key={i}
+                        className="birthday-balloon"
+                        style={{
+                            left: `${balloon.left}%`,
+                            '--balloon': balloon.color,
+                            '--dur': `${balloon.duration}s`,
+                            '--delay': `${balloon.delay}s`,
+                            '--scale': balloon.scale,
+                        }}
+                    />
+                ))}
+            </div>
+            <span className="slide-kicker birthday-kicker">HARI ULANG TAHUN</span>
             <p className="birthday-heading">Selamat ulang tahun</p>
             <DisplayImage className="birthday-photo" src={birthday.image_url} alt={`Foto ${birthday.employee_name}`} />
             <h1>{birthday.employee_name}</h1>
             <p className="birthday-division">{birthday.division ? `Divisi ${birthday.division}` : ''}</p>
             <time className="birthday-date">{dateLabel}</time>
+            <span className="birthday-burst" aria-hidden="true" />
+            <span className="birthday-burst birthday-burst-two" aria-hidden="true" />
         </article>
     );
 }
@@ -329,7 +684,20 @@ export default function DigitalBoard() {
     const [slideIndex, setSlideIndex] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
     const [fullscreenError, setFullscreenError] = useState(false);
+    const [scheduleNotice, setScheduleNotice] = useState(null);
+    const nowMs = useNowTick();
+    const brandLogoUrl = useMemo(
+        () => data?.live_channels?.find((channel) => (channel.name || '').toLowerCase().includes('johen pubg'))?.logo_url ?? null,
+        [data],
+    );
 
+    useEffect(() => {
+        if (!scheduleNotice) return undefined;
+
+        const timer = window.setTimeout(() => setScheduleNotice(null), NOTICE_DISMISS);
+
+        return () => window.clearTimeout(timer);
+    }, [scheduleNotice]);
 
     useEffect(() => {
         document.body.classList.add('display-mode');
@@ -414,6 +782,21 @@ export default function DigitalBoard() {
             setFullscreenError(true);
         }
     }
+    function handleSlotAccess(slot, event) {
+        const phase = slotPhase(slot, new Date());
+
+        if (phase === 'live') {
+            if (event.currentTarget?.tagName !== 'A' && slot.stream_link_url) {
+                window.open(slot.stream_link_url, '_blank', 'noopener,noreferrer');
+            }
+
+            return;
+        }
+
+        event.preventDefault();
+        setScheduleNotice({ slot, phase, at: Date.now() });
+    }
+
     const fullscreenErrorNotice = fullscreenError ? (<div className="display-error" role="status">Mode layar penuh tidak dapat diaktifkan.</div>) : null;
 
     if (isLoading && !data) {
@@ -432,12 +815,13 @@ const activeSlide = slides[slideIndex % slides.length];
             {hasError && <div className="display-error" role="status">Informasi sedang diperbarui</div>}
             <div className="display-stage">
                 {activeSlide.categoryKey === 'promotions' && <PromotionSlide key={`promotion-${activeSlide.item.id}`} promotion={activeSlide.item} />}
-                {activeSlide.categoryKey === 'achievements' && <AchievementSlide key={`achievement-${activeSlide.item.id}`} achievement={activeSlide.item} />}
-                {activeSlide.categoryKey === 'live_hosts' && <LiveHostsSlide key={`channel-${activeSlide.item.id}`} channel={activeSlide.item} />}
-                {activeSlide.categoryKey === 'birthdays' && <BirthdaySlide key={`birthday-${activeSlide.item.id}`} birthday={activeSlide.item} />}
-                {activeSlide.categoryKey === 'weekly_meetings' && <WeeklyMeetingSlide key="weekly-meeting" meetings={activeSlide.item} />}
+                {activeSlide.categoryKey === 'achievements' && <AchievementSlide key={`achievement-${activeSlide.item.id}`} achievement={activeSlide.item} brandLogoUrl={brandLogoUrl} />}
+                {activeSlide.categoryKey === 'live_hosts' && <LiveHostsSlide key={`channel-${activeSlide.item.id}`} channel={activeSlide.item} now={new Date(nowMs)} onBlocked={handleSlotAccess} />}
+                {activeSlide.categoryKey === 'birthdays' && <BirthdaySlide key={`birthday-${activeSlide.item.id}`} birthday={activeSlide.item} brandLogoUrl={brandLogoUrl} />}
+                {activeSlide.categoryKey === 'weekly_meetings' && <WeeklyMeetingSlide key="weekly-meeting" meetings={activeSlide.item} now={new Date(nowMs)} brandLogoUrl={brandLogoUrl} />}
             </div>
             <footer className="display-footer" aria-hidden="true" />
+            <ScheduleNotice notice={scheduleNotice} now={new Date(nowMs)} onClose={() => setScheduleNotice(null)} />
             {fullscreenErrorNotice}
             {!isFullscreen && document.fullscreenEnabled && <button className="fullscreen-control" type="button" onClick={toggleFullscreen} aria-label="Tampilkan layar penuh">FULLSCREEN</button>}
             

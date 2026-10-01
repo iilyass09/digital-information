@@ -28,12 +28,19 @@ export default function LiveHostBoard({ title }) {
 
     useEffect(() => { load(); }, [load]);
 
-    function pick(slotId, hostId) {
+    function pick(slotId, field, value) {
         setBoard((current) => ({
             ...current,
             channels: current.channels.map((channel) => ({
                 ...channel,
-                slots: channel.slots.map((slot) => (slot.id === slotId ? { ...slot, host_id: hostId ? Number(hostId) : null } : slot)),
+                slots: channel.slots.map((slot) => {
+                    if (slot.id !== slotId) return slot;
+                    const next = { ...slot, [field]: value ? Number(value) : null };
+                    // Clearing the host must also drop its link, otherwise the
+                    // board would keep advertising a stream with nobody hosting.
+                    if (field === 'host_id' && !value) next.live_stream_link_id = null;
+                    return next;
+                }),
             })),
         }));
     }
@@ -50,6 +57,7 @@ export default function LiveHostBoard({ title }) {
                     assignments: board.channels.flatMap((channel) => channel.slots.map((slot) => ({
                         live_schedule_id: slot.id,
                         host_id: slot.host_id ?? null,
+                        live_stream_link_id: slot.host_id ? slot.live_stream_link_id ?? null : null,
                     }))),
                 },
             }));
@@ -72,6 +80,7 @@ export default function LiveHostBoard({ title }) {
             <div className="page-toolbar">
                 <p className="muted">Pilih tanggal, lalu tentukan host untuk setiap slot jadwal yang sudah tersedia.</p>
                 <a className="button button-light" href="/admin/hosts">Kelola daftar host</a>
+                <a className="button button-light" href="/admin/stream-links">Kelola link streaming</a>
             </div>
 
             <div className="filter-bar">
@@ -108,10 +117,21 @@ export default function LiveHostBoard({ title }) {
                                     {channel.slots.map((slot) => (
                                         <label className="schedule-slot" key={slot.id}>
                                             <span className="schedule-time">{slot.start_time} - {slot.end_time}</span>
-                                            <select value={slot.host_id ?? ''} onChange={(event) => pick(slot.id, event.target.value)}>
+                                            <select value={slot.host_id ?? ''} onChange={(event) => pick(slot.id, 'host_id', event.target.value)}>
                                                 <option value="">Belum diisi</option>
                                                 {board.hosts.map((host) => (
                                                     <option key={host.id} value={host.id}>{host.name}</option>
+                                                ))}
+                                            </select>
+                                            <select
+                                                aria-label={`Link streaming ${slot.start_time} - ${slot.end_time}`}
+                                                value={slot.live_stream_link_id ?? ''}
+                                                disabled={!slot.host_id}
+                                                onChange={(event) => pick(slot.id, 'live_stream_link_id', event.target.value)}
+                                            >
+                                                <option value="">Tanpa link</option>
+                                                {board.stream_links.map((link) => (
+                                                    <option key={link.id} value={link.id}>{link.name}</option>
                                                 ))}
                                             </select>
                                         </label>

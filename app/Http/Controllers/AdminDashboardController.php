@@ -21,6 +21,7 @@ class AdminDashboardController
             'hosts' => 'Daftar Host',
             'channels' => 'Channel Live',
             'weekly-meetings' => 'Weekly Meeting',
+            'stream-links' => 'Link Streaming',
             'display-preview' => 'Preview Display',
         ];
 
@@ -49,7 +50,7 @@ class AdminDashboardController
 
     private function form(string $resource, ?int $id): View
     {
-        $titles = ['promotions' => 'Info Promosi', 'achievements' => 'Achievement', 'birthdays' => 'Birthday', 'hosts' => 'Daftar Host', 'channels' => 'Channel Live', 'weekly-meetings' => 'Weekly Meeting'];
+        $titles = ['promotions' => 'Info Promosi', 'achievements' => 'Achievement', 'birthdays' => 'Birthday', 'hosts' => 'Daftar Host', 'channels' => 'Channel Live', 'weekly-meetings' => 'Weekly Meeting', 'stream-links' => 'Link Streaming'];
         abort_unless(isset($titles[$resource]), 404);
 
         return view('app', ['page' => 'admin/form', 'props' => [

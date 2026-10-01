@@ -8,15 +8,18 @@ use App\Models\Birthday;
 use App\Models\Host;
 use App\Models\LiveChannel;
 use App\Models\LiveHost;
+use App\Models\LiveStreamLink;
 use App\Models\Promotion;
 use App\Models\WeeklyMeeting;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class AdminContentController extends Controller
 {
@@ -28,6 +31,7 @@ class AdminContentController extends Controller
         'hosts' => Host::class,
         'channels' => LiveChannel::class,
         'weekly-meetings' => WeeklyMeeting::class,
+        'stream-links' => LiveStreamLink::class,
     ];
 
     /** @var list<string> */
@@ -81,6 +85,7 @@ class AdminContentController extends Controller
             $record->{$field} = $path;
         }
         $record->save();
+        $this->dumpAfterUpload($uploads);
 
         return response()->json(['success' => true, 'data' => $this->serialize($record)], 201);
     }
@@ -105,8 +110,32 @@ class AdminContentController extends Controller
                 Storage::disk('public')->delete($previousFiles[$field]);
             }
         }
+        $this->dumpAfterUpload($uploads);
 
         return response()->json(['success' => true, 'data' => $this->serialize($record)]);
+    }
+
+    /**
+     * Refresh the portable dump whenever an upload changes the database.
+     *
+     * The dump is the only artefact that travels with the project when the
+     * board is moved to another machine, so it must stay in step with the
+     * rows and filenames the upload just wrote. Failures are logged rather
+     * than surfaced: losing the snapshot must never fail a successful upload.
+     *
+     * @param  array<string, string>  $uploads
+     */
+    private function dumpAfterUpload(array $uploads): void
+    {
+        if ($uploads === [] || ! config('admin.auto_dump')) {
+            return;
+        }
+
+        try {
+            Artisan::call('db:dump', ['--force' => true]);
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 
     public function destroy(string $resource, int $id): JsonResponse
@@ -125,7 +154,7 @@ class AdminContentController extends Controller
 
     public function toggle(string $resource, int $id): JsonResponse
     {
-        abort_unless(in_array($resource, ['promotions', 'achievements', 'birthdays', 'hosts', 'channels', 'weekly-meetings'], true), 404);
+        abort_unless(in_array($resource, ['promotions', 'achievements', 'birthdays', 'hosts', 'channels', 'weekly-meetings', 'stream-links'], true), 404);
         $record = $this->model($resource)::query()->findOrFail($id);
         $record->is_active = ! $record->is_active;
         $record->save();
@@ -194,6 +223,12 @@ class AdminContentController extends Controller
                 'birth_date' => [$required, 'date_format:Y-m-d'], 'is_active' => ['sometimes', 'boolean'],
                 'sort_order' => ['sometimes', 'integer', 'min:0'],
                 'image' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            ],
+            'stream-links' => [
+                'name' => [$required, 'string', 'max:255'],
+                'url' => [$required, 'string', 'max:2048', 'url:http,https'],
+                'logo' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+                'is_active' => ['sometimes', 'boolean'], 'sort_order' => ['sometimes', 'integer', 'min:0'],
             ],
             default => throw ValidationException::withMessages(['resource' => 'Jenis konten tidak valid.']),
         };

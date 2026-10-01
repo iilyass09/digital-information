@@ -287,3 +287,6 @@ button { cursor: pointer; }
 @media(max-width:420px){.summary-grid{grid-template-columns:1fr 1fr}.summary-card{align-items:flex-start;flex-direction:column}.page-toolbar{flex-wrap:wrap}.page-toolbar .button{width:100%}}
 .notice-success{color:#276b4d;background:#eaf7ef}
 .schedule-board{display:grid;gap:1rem;margin-top:1rem}.schedule-channel{padding:1.1rem 1.2rem;border:1px solid #e5eaf1;border-radius:.8rem;background:#fff}.schedule-channel h2{margin:0 0 .85rem;font-size:1rem}.schedule-slots{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.9rem}.schedule-slot{display:grid;gap:.4rem;color:#33455b;font-size:.82rem;font-weight:700}.schedule-time{color:#718095;font-size:.72rem;letter-spacing:.04em;text-transform:uppercase}.schedule-slot select{min-height:2.65rem;padding:.6rem .7rem;border:1px solid #cfd8e3;border-radius:.5rem;color:#17243a;background:#fff;font:inherit;font-weight:400}@media(max-width:1050px){.schedule-slots{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.schedule-slots{grid-template-columns:1fr}}
+.nav-group{display:grid;gap:.35rem}
+.nav-group + .nav-group{margin-top:1rem}
+.cms-sidebar nav{min-height:0;overflow-y:auto}

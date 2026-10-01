@@ -1,2 +1,30 @@
+# Uploaded content is tracked in git so the board stays intact when the
+# project is moved to another machine. Subdirectories mirror the resource
+# names accepted by AdminContentController::uploads().
 *
 !.gitignore
+
+!promotions/
+!achievements/
+!birthdays/
+!hosts/
+!channels/
+!weekly-meetings/
+
+# Re-include the contents of each upload directory (negated after the "*" above).
+!promotions/**
+!achievements/**
+!birthdays/**
+!hosts/**
+!channels/**
+!weekly-meetings/**
+
+# Temporary, partial and OS noise files never belong in the repository.
+*.tmp
+*.part
+*.partial
+*.crdownload
+*.download
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -8,6 +8,7 @@ use App\Models\Host;
 use App\Models\LiveChannel;
 use App\Models\LiveHost;
 use App\Models\LiveSchedule;
+use App\Models\LiveStreamLink;
 use App\Models\Promotion;
 use App\Models\WeeklyMeeting;
 use Database\Seeders\LiveChannelSeeder;
@@ -39,7 +40,13 @@ class DisplayApiTest extends TestCase
         Achievement::factory()->create(['employee_name' => 'Ayu', 'is_active' => true]);
         Achievement::factory()->create(['employee_name' => 'Bima', 'is_active' => false]);
 
-        LiveHost::factory()->for($activeSlot)->for($host)->create(['date' => '2026-09-30']);
+        $streamLink = LiveStreamLink::factory()->create([
+            'name' => 'TikTok Siang',
+            'url' => 'https://www.tiktok.com/@johen/live',
+            'logo' => 'stream-links/tiktok.png',
+        ]);
+
+        LiveHost::factory()->for($activeSlot)->for($host)->create(['date' => '2026-09-30', 'live_stream_link_id' => $streamLink->id]);
         LiveHost::factory()->for($inactiveSlot)->for($host)->create(['date' => '2026-09-30', 'is_active' => false]);
         LiveHost::factory()->for($yesterdaySlot)->for($host)->create(['date' => '2026-09-29']);
         $inactiveChannel = LiveChannel::factory()->create(['is_active' => false]);
@@ -66,8 +73,12 @@ class DisplayApiTest extends TestCase
             ->assertJsonPath('data.live_channels.0.slots.0.host_photo', Storage::disk('public')->url('hosts/host.jpg'))
             ->assertJsonPath('data.live_channels.0.slots.0.start_time', '09:00')
             ->assertJsonPath('data.live_channels.0.slots.0.end_time', '10:00')
+            ->assertJsonPath('data.live_channels.0.slots.0.stream_link_name', 'TikTok Siang')
+            ->assertJsonPath('data.live_channels.0.slots.0.stream_link_url', 'https://www.tiktok.com/@johen/live')
+            ->assertJsonPath('data.live_channels.0.slots.0.stream_link_logo_url', Storage::disk('public')->url('stream-links/tiktok.png'))
             ->assertJsonPath('data.live_channels.0.slots.1.host_name', null)
             ->assertJsonPath('data.live_channels.0.slots.1.host_photo', null)
+            ->assertJsonPath('data.live_channels.0.slots.1.stream_link_url', null)
             ->assertJsonPath('data.live_channels.0.slots.2.host_name', null)
             ->assertJsonCount(2, 'data.birthdays')
             ->assertJsonPath('data.birthdays.0.employee_name', 'Dina')
