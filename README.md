@@ -89,7 +89,23 @@ php artisan storage:link
 
 Wajib dijalankan di setiap device. Tanpa symlink ini, foto tidak bisa diakses lewat `/storage/...`.
 
-### 5. Jalankan
+### 5. Batas upload PHP
+
+Banner promosi menerima GIF sampai **50 MB**, jadi PHP harus diizinkan sebesar itu. Buka `php.ini` dan pastikan:
+
+```ini
+upload_max_filesize = 64M
+post_max_size = 72M
+memory_limit = 256M
+```
+
+Lalu restart PHP/web server.
+
+> Batas PHP sengaja dibuat lebih besar dari 50 MB. Dengan begitu file yang keponging ditolak oleh validasi Laravel dengan pesan "Ukuran banner maksimal 50 MB.", bukan dipotong diam-diam oleh PHP.
+>
+> File lebih dari batas `post_max_size` akan ditolak HTTP dengan pesan umum. Kalau nanti dipasang di belakang reverse proxy, `client_max_body_size` (nginx) juga harus dinaikkan.
+
+### 6. Jalankan
 
 ```bash
 npm run dev          # terminal 1 — Vite
@@ -165,11 +181,13 @@ admin upload foto
   → salin database.sql               php artisan db:restore --force
                                      npm run build
                                      php artisan storage:link
+                                     setel ulang php.ini
 ```
 
 ### Catatan
 
 - `php artisan storage:link` harus dijalankan ulang di device baru. Symlink menunjuk path absolut, jadi tidak pernah ikut pindah.
+- Batas upload di `php.ini` juga tidak ikut git, jadi harus disetel ulang di device baru.
 - `db:restore` menolak jalan bila database sudah berisi data, kecuali diberi `--force`. Perintah ini menghapus isi tabel sebelum mengimpor.
 - Foto yang sudah pernah di-commit tidak hilang dari riwayat git meski dihapus dari CMS.
 
@@ -222,6 +240,23 @@ GET|PUT    /api/admin/live-hosts/board
 ```
 
 `{resource}` adalah salah satu dari: `promotions`, `achievements`, `birthdays`, `hosts`, `channels`, `weekly-meetings`, `stream-links`.
+
+### Upload gambar
+
+Batas dan format gambar berbeda per resource:
+
+| Resource | Field | Format | Maksimal |
+|---|---|---|---|
+| Promosi | `image` | JPG, JPEG, PNG, WebP, **GIF** | **50 MB** |
+| Achievement, Birthday | `image` | JPG, JPEG, PNG, WebP | 5 MB |
+| Host, Weekly Meeting | `photo` | JPG, JPEG, PNG, WebP | 5 MB |
+| Channel, Stream Link | `logo` | JPG, JPEG, PNG, WebP | 5 MB |
+
+GIF hanya diterima untuk banner promosi karena itulah satu-satunya gambar yang ditampilkan dalam ukuran besar dengan animasi yang memang dilihat. Foto, avatar, dan logo tidak memperoleh manfaat dari GIF, jadi tetap dibatasi 5 MB supaya CMS tidak menyimpan berkas besar tanpa perlu.
+
+Aplikasi tidak melakukan resize maupun re-encode, sehingga animasi GIF sampai ke display utuh. Browser meng-cache berkas, jadi TV cukup mengunduhnya sekali.
+
+> Batas ini tidak berlaku bila `php.ini` masih restrictive — lihat [Batas upload PHP](#5-batas-upload-php).
 
 ### Link streaming Host Live
 

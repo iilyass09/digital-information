@@ -366,6 +366,45 @@ class AdminCmsFeatureTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('image');
     }
 
+    public function test_admin_can_upload_an_animated_gif_promotion_banner(): void
+    {
+        Storage::fake('public');
+        $admin = User::factory()->admin()->create();
+        $this->actingAs($admin);
+
+        $this->postJson('/api/admin/promotions', [
+            'title' => 'Promo Animasi', 'image' => UploadedFile::fake()->image('banner.gif'),
+        ])->assertCreated()->assertJsonPath('data.title', 'Promo Animasi');
+
+        $promotion = Promotion::firstOrFail();
+        $this->assertStringStartsWith('promotions/', $promotion->image);
+        $this->assertStringEndsWith('.gif', $promotion->image);
+        Storage::disk('public')->assertExists($promotion->image);
+    }
+
+    public function test_gif_is_only_accepted_for_promotion_banners(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $this->actingAs($admin);
+
+        $this->postJson('/api/admin/achievements', [
+            'employee_name' => 'Nadia', 'division' => 'Operations', 'title' => 'Top Sales',
+            'achievement_date' => '2026-09-30', 'image' => UploadedFile::fake()->image('foto.gif'),
+        ])->assertUnprocessable()->assertJsonValidationErrors('image');
+    }
+
+    public function test_promotion_banner_validation_messages_are_translated(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $this->actingAs($admin);
+
+        $this->postJson('/api/admin/promotions', [
+            'title' => 'Format salah', 'image' => UploadedFile::fake()->image('poster.bmp'),
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('image')
+            ->assertJsonPath('errors.image.0', 'Banner harus berformat JPG, PNG, WebP, atau GIF.');
+    }
+
     public function test_dashboard_counts_active_records_for_today(): void
     {
         $this->travelTo(now()->setDate(2026, 9, 30)->startOfDay());

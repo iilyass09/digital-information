@@ -194,7 +194,7 @@ class AdminContentController extends Controller
                 'start_date' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
                 'end_date' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:start_date'],
                 'is_active' => ['sometimes', 'boolean'], 'sort_order' => ['sometimes', 'integer', 'min:0'],
-                'image' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+                'image' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:51200'],
             ],
             'achievements' => [
                 'employee_name' => [$required, 'string', 'max:255'], 'division' => [$required, 'string', 'max:255'],
@@ -233,7 +233,26 @@ class AdminContentController extends Controller
             default => throw ValidationException::withMessages(['resource' => 'Jenis konten tidak valid.']),
         };
 
-        return $request->validate($rules);
+        return $request->validate($rules, $this->messages($resource));
+    }
+
+    /**
+     * Validation messages in the language the CMS speaks. The application has
+     * no lang/ folder, so Laravel falls back to its English defaults for
+     * everything else; only the banner rules are translated here.
+     *
+     * @return array<string, string>
+     */
+    private function messages(string $resource): array
+    {
+        if ($resource !== 'promotions') {
+            return [];
+        }
+
+        return [
+            'image.max' => 'Ukuran banner maksimal 50 MB.',
+            'image.mimes' => 'Banner harus berformat JPG, PNG, WebP, atau GIF.',
+        ];
     }
 
     /** @return array<string, mixed> */
