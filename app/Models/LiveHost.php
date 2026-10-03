@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['live_schedule_id', 'host_id', 'live_stream_link_id', 'date', 'is_active'])]
+#[Fillable(['live_schedule_id', 'host_id', 'is_active'])]
 class LiveHost extends Model
 {
     /** @use HasFactory<LiveHostFactory> */
@@ -17,7 +17,6 @@ class LiveHost extends Model
     protected function casts(): array
     {
         return [
-            'date' => 'date',
             'is_active' => 'boolean',
         ];
     }
@@ -30,10 +29,5 @@ class LiveHost extends Model
     public function host(): BelongsTo
     {
         return $this->belongsTo(Host::class);
-    }
-
-    public function liveStreamLink(): BelongsTo
-    {
-        return $this->belongsTo(LiveStreamLink::class);
     }
 }

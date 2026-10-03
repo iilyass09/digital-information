@@ -309,6 +309,9 @@ Setiap channel memiliki **4 host setiap harinya**.
 Fields:
 
 - name
+- logo
+- stream_url
+- stream_logo
 - is_active
 - sort_order
 
@@ -316,26 +319,25 @@ Seed default harus membuat 8 channel di atas.
 
 ## Live Host Schedule
 
+Slot jadwal milik channel bersifat permanen: tidak ada tanggal, jadi jadwal yang sama
+ditampilkan setiap hari.
+
 Fields:
 
 - live_channel_id
-- host_name
-- date
 - start_time
 - end_time
-- is_active
 - sort_order
+
+Host per slot disimpan di tabel `live_hosts` (satu baris per slot, `live_schedule_id` unik).
 
 Admin dapat:
 
-- Menambah jadwal
-- Mengubah jadwal
-- Menghapus jadwal
-- Memilih tanggal
-- Memilih channel
-- Mengatur host
-- Mengatur jam mulai/selesai
+- Mengubah host setiap slot
 - Mengaktifkan/nonaktifkan jadwal
+- Mengatur link streaming (URL + logo) per channel, dipakai otomatis semua slot channel itu
+
+Tidak ada lagi halaman Link Streaming terpisah maupun pemilihan tanggal.
 
 ## Display
 
@@ -479,15 +481,14 @@ updated_at
 
 ## live_hosts
 
+Satu baris = satu slot jadwal yang berlaku permanen setiap hari, tanpa kolom tanggal.
+`live_schedule_id` unik sehingga satu slot hanya boleh dipegang satu host.
+
 ```text
 id
-live_channel_id
-host_name
-date
-start_time
-end_time
+live_schedule_id
+host_id
 is_active
-sort_order
 created_at
 updated_at
 ```
@@ -495,8 +496,9 @@ updated_at
 Relationship:
 
 ```text
-LiveChannel hasMany LiveHosts
-LiveHost belongsTo LiveChannel
+LiveSchedule hasOne LiveHost
+LiveHost belongsTo LiveSchedule
+LiveHost belongsTo Host
 ```
 
 ## birthdays
@@ -560,7 +562,7 @@ Contoh:
 
 - Promotion hanya aktif dan sedang dalam periode
 - Achievement hanya aktif
-- Live host hanya jadwal hari ini dan aktif
+- Live host hanya jadwal aktif; jadwal berulang tanpa filter tanggal
 - Birthday hanya karyawan yang ulang tahun hari ini dan aktif
 
 ---
@@ -734,7 +736,7 @@ Dashboard summary:
 ```text
 Promosi Aktif
 Achievement Aktif
-Host Hari Ini
+Host Terjadwal
 Birthday Hari Ini
 ```
 
@@ -1092,7 +1094,7 @@ Jangan menambahkan fallback SQLite.
 - [ ] Date filtering bekerja
 - [ ] Channel filtering bekerja
 - [ ] Host dapat ditambahkan
-- [ ] Display hanya menampilkan jadwal hari ini
+- [ ] Display hanya menampilkan jadwal aktif
 
 ## Birthday
 

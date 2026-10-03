@@ -8,7 +8,6 @@ use App\Models\Birthday;
 use App\Models\Host;
 use App\Models\LiveChannel;
 use App\Models\LiveHost;
-use App\Models\LiveStreamLink;
 use App\Models\Promotion;
 use App\Models\WeeklyMeeting;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,7 +30,6 @@ class AdminContentController extends Controller
         'hosts' => Host::class,
         'channels' => LiveChannel::class,
         'weekly-meetings' => WeeklyMeeting::class,
-        'stream-links' => LiveStreamLink::class,
     ];
 
     /** @var list<string> */
@@ -45,7 +43,7 @@ class AdminContentController extends Controller
                 ->where(fn (Builder $query) => $query->whereNull('end_date')->orWhereDate('end_date', '>=', today()))
                 ->count(),
             'active_achievements' => Achievement::where('is_active', true)->count(),
-            'today_hosts' => LiveHost::where('is_active', true)->whereNotNull('host_id')->whereDate('date', today())->count(),
+            'assigned_hosts' => LiveHost::where('is_active', true)->whereNotNull('host_id')->count(),
             'today_birthdays' => Birthday::where('is_active', true)
                 ->whereMonth('birth_date', today()->month)
                 ->whereDay('birth_date', today()->day)
@@ -154,7 +152,7 @@ class AdminContentController extends Controller
 
     public function toggle(string $resource, int $id): JsonResponse
     {
-        abort_unless(in_array($resource, ['promotions', 'achievements', 'birthdays', 'hosts', 'channels', 'weekly-meetings', 'stream-links'], true), 404);
+        abort_unless(in_array($resource, ['promotions', 'achievements', 'birthdays', 'hosts', 'channels', 'weekly-meetings'], true), 404);
         $record = $this->model($resource)::query()->findOrFail($id);
         $record->is_active = ! $record->is_active;
         $record->save();
@@ -223,12 +221,6 @@ class AdminContentController extends Controller
                 'birth_date' => [$required, 'date_format:Y-m-d'], 'is_active' => ['sometimes', 'boolean'],
                 'sort_order' => ['sometimes', 'integer', 'min:0'],
                 'image' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
-            ],
-            'stream-links' => [
-                'name' => [$required, 'string', 'max:255'],
-                'url' => [$required, 'string', 'max:2048', 'url:http,https'],
-                'logo' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
-                'is_active' => ['sometimes', 'boolean'], 'sort_order' => ['sometimes', 'integer', 'min:0'],
             ],
             default => throw ValidationException::withMessages(['resource' => 'Jenis konten tidak valid.']),
         };

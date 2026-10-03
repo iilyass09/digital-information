@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'logo', 'is_active', 'sort_order'])]
+#[Fillable(['name', 'logo', 'stream_url', 'stream_logo', 'is_active', 'sort_order'])]
 class LiveChannel extends Model
 {
     /** @use HasFactory<LiveChannelFactory> */

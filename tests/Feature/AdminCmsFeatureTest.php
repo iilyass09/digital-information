@@ -8,7 +8,6 @@ use App\Models\Host;
 use App\Models\LiveChannel;
 use App\Models\LiveHost;
 use App\Models\LiveSchedule;
-use App\Models\LiveStreamLink;
 use App\Models\Promotion;
 use App\Models\User;
 use App\Models\WeeklyMeeting;
@@ -91,7 +90,7 @@ class AdminCmsFeatureTest extends TestCase
         $this->deleteJson('/api/admin/hosts/'.$hostId)->assertOk();
     }
 
-    public function test_admin_can_read_and_update_the_daily_live_host_board(): void
+    public function test_admin_can_read_and_update_the_recurring_live_host_board(): void
     {
         $admin = User::factory()->admin()->create();
         $channel = LiveChannel::factory()->create(['name' => 'Johen PUBG']);
@@ -99,13 +98,11 @@ class AdminCmsFeatureTest extends TestCase
         $host = Host::factory()->create(['name' => 'Fathan']);
         $this->actingAs($admin);
 
-        $this->getJson('/api/admin/live-hosts/board?date=2026-10-01')->assertOk()
-            ->assertJsonPath('data.date', '2026-10-01')
+        $this->getJson('/api/admin/live-hosts/board')->assertOk()
             ->assertJsonCount(1, 'data.channels')
             ->assertJsonPath('data.channels.0.slots.0.host_id', null);
 
         $this->putJson('/api/admin/live-hosts/board', [
-            'date' => '2026-10-01',
             'assignments' => [
                 ['live_schedule_id' => $schedule->id, 'host_id' => $host->id],
             ],
@@ -114,15 +111,37 @@ class AdminCmsFeatureTest extends TestCase
             ->assertJsonPath('data.channels.0.slots.0.host_name', 'Fathan');
 
         $this->assertDatabaseHas('live_hosts', [
-            'live_schedule_id' => $schedule->id, 'host_id' => $host->id, 'date' => '2026-10-01',
+            'live_schedule_id' => $schedule->id, 'host_id' => $host->id,
         ]);
 
         $this->putJson('/api/admin/live-hosts/board', [
-            'date' => '2026-10-01',
             'assignments' => [
                 ['live_schedule_id' => $schedule->id, 'host_id' => null],
             ],
         ])->assertOk()->assertJsonPath('data.channels.0.slots.0.host_id', null);
+    }
+
+    public function test_saving_a_slot_replaces_the_previous_assignment_instead_of_adding_one(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $channel = LiveChannel::factory()->create();
+        $schedule = LiveSchedule::factory()->for($channel)->create();
+        $firstHost = Host::factory()->create(['name' => 'Fathan']);
+        $secondHost = Host::factory()->create(['name' => 'Rafly']);
+        $this->actingAs($admin);
+
+        LiveHost::factory()->for($schedule)->for($firstHost)->create();
+
+        $this->putJson('/api/admin/live-hosts/board', [
+            'assignments' => [
+                ['live_schedule_id' => $schedule->id, 'host_id' => $secondHost->id],
+            ],
+        ])->assertOk()->assertJsonPath('data.channels.0.slots.0.host_name', 'Rafly');
+
+        $this->assertSame(1, LiveHost::where('live_schedule_id', $schedule->id)->count());
+        $this->assertDatabaseHas('live_hosts', [
+            'live_schedule_id' => $schedule->id, 'host_id' => $secondHost->id,
+        ]);
     }
 
     public function test_admin_can_open_the_create_and_edit_form_for_every_resource(): void
@@ -225,107 +244,102 @@ class AdminCmsFeatureTest extends TestCase
             ->assertJsonStructure(['data' => ['prev_page_url']]);
     }
 
-    public function test_admin_can_attach_a_stream_link_to_a_daily_slot(): void
+    public function test_admin_can_set_one_stream_link_per_channel_from_the_board(): void
     {
         $admin = User::factory()->admin()->create();
         $channel = LiveChannel::factory()->create(['name' => 'Johen PUBG']);
         $schedule = LiveSchedule::factory()->for($channel)->create(['start_time' => '09:00:00', 'end_time' => '12:00:00']);
-        $host = Host::factory()->create(['name' => 'Fathan']);
-        $link = LiveStreamLink::factory()->create(['name' => 'TikTok Siang']);
-        $inactiveLink = LiveStreamLink::factory()->create(['name' => 'TikTok Lama', 'is_active' => false]);
         $this->actingAs($admin);
 
-        $this->getJson('/api/admin/live-hosts/board?date=2026-10-01')->assertOk()
-            ->assertJsonCount(1, 'data.stream_links')
-            ->assertJsonPath('data.stream_links.0.name', 'TikTok Siang')
-            ->assertJsonPath('data.channels.0.slots.0.live_stream_link_id', null);
+        $this->getJson('/api/admin/live-hosts/board')->assertOk()
+            ->assertJsonPath('data.channels.0.stream_url', null)
+            ->assertJsonPath('data.channels.0.stream_logo_url', null)
+            ->assertJsonMissingPath('data.stream_links');
 
         $this->putJson('/api/admin/live-hosts/board', [
-            'date' => '2026-10-01',
-            'assignments' => [
-                ['live_schedule_id' => $schedule->id, 'host_id' => $host->id, 'live_stream_link_id' => $link->id],
-            ],
-        ])->assertOk()->assertJsonPath('data.channels.0.slots.0.live_stream_link_id', $link->id);
+            'assignments' => [['live_schedule_id' => $schedule->id, 'host_id' => null]],
+            'channels' => [[
+                'live_channel_id' => $channel->id,
+                'stream_url' => 'https://www.tiktok.com/@johen/live',
+            ]],
+        ])->assertOk()->assertJsonPath('data.channels.0.stream_url', 'https://www.tiktok.com/@johen/live');
 
-        $this->assertDatabaseHas('live_hosts', [
-            'live_schedule_id' => $schedule->id, 'host_id' => $host->id, 'live_stream_link_id' => $link->id,
+        $this->assertDatabaseHas('live_channels', [
+            'id' => $channel->id, 'stream_url' => 'https://www.tiktok.com/@johen/live',
         ]);
 
         $this->putJson('/api/admin/live-hosts/board', [
-            'date' => '2026-10-01',
-            'assignments' => [
-                ['live_schedule_id' => $schedule->id, 'host_id' => $host->id, 'live_stream_link_id' => $inactiveLink->id],
-            ],
-        ])->assertUnprocessable()->assertJsonValidationErrors('assignments.0.live_stream_link_id');
+            'assignments' => [['live_schedule_id' => $schedule->id, 'host_id' => null]],
+            'channels' => [['live_channel_id' => $channel->id, 'stream_url' => 'bukan-url']],
+        ])->assertUnprocessable()->assertJsonValidationErrors('channels.0.stream_url');
 
-        $this->putJson('/api/admin/live-hosts/board', [
-            'date' => '2026-10-01',
-            'assignments' => [
-                ['live_schedule_id' => $schedule->id, 'host_id' => null, 'live_stream_link_id' => $link->id],
-            ],
-        ])->assertOk()->assertJsonPath('data.channels.0.slots.0.live_stream_link_id', $link->id);
+        $this->post('/api/admin/live-hosts/board', [
+            '_method' => 'PUT',
+            'assignments' => [['live_schedule_id' => $schedule->id, 'host_id' => null]],
+            'channels' => [['live_channel_id' => $channel->id, 'stream_logo' => UploadedFile::fake()->create('logo.pdf', 10, 'application/pdf')]],
+        ], ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('channels.0.stream_logo');
     }
 
-    public function test_admin_can_manage_stream_links(): void
+    public function test_admin_can_upload_a_channel_stream_logo(): void
     {
+        Storage::fake('public');
         $admin = User::factory()->admin()->create();
+        $channel = LiveChannel::factory()->create();
+        $schedule = LiveSchedule::factory()->for($channel)->create();
         $this->actingAs($admin);
 
-        $created = $this->postJson('/api/admin/stream-links', [
-            'name' => 'TikTok Pagi', 'url' => 'https://www.tiktok.com/@johen/live', 'sort_order' => 2,
-        ])->assertCreated()->assertJsonPath('data.name', 'TikTok Pagi');
+        $response = $this->post('/api/admin/live-hosts/board', [
+            '_method' => 'PUT',
+            'assignments' => [['live_schedule_id' => $schedule->id, 'host_id' => null]],
+            'channels' => [[
+                'live_channel_id' => $channel->id,
+                'stream_url' => 'https://www.tiktok.com/@johen/live',
+                'stream_logo' => UploadedFile::fake()->image('tiktok.png'),
+            ]],
+        ], ['Accept' => 'application/json'])->assertOk()
+            ->assertJsonPath('data.channels.0.stream_url', 'https://www.tiktok.com/@johen/live');
 
-        $id = $created->json('data.id');
-
-        $this->getJson('/api/admin/stream-links')->assertOk()
-            ->assertJsonCount(1, 'data.data')
-            ->assertJsonPath('data.total', 1);
-
-        $this->putJson('/api/admin/stream-links/'.$id, ['name' => 'TikTok Pagi Revisi', 'url' => 'https://www.tiktok.com/@johen/live2'])
-            ->assertOk()->assertJsonPath('data.name', 'TikTok Pagi Revisi');
-
-        $this->patchJson('/api/admin/stream-links/'.$id.'/toggle')->assertOk()->assertJsonPath('data.is_active', false);
-
-        $this->deleteJson('/api/admin/stream-links/'.$id)->assertOk();
-        $this->assertDatabaseMissing('live_stream_links', ['id' => $id]);
-
-        $this->postJson('/api/admin/stream-links', ['name' => 'Tanpa URL'])
-            ->assertUnprocessable()->assertJsonValidationErrors('url');
+        $channel->refresh();
+        $this->assertStringStartsWith('live-channels/', $channel->stream_logo);
+        Storage::disk('public')->assertExists($channel->stream_logo);
+        $this->assertSame(Storage::disk('public')->url($channel->stream_logo), $response->json('data.channels.0.stream_logo_url'));
     }
 
-    public function test_admin_can_store_a_long_tiktok_share_url(): void
+    public function test_admin_can_store_a_long_tiktok_share_url_on_a_channel(): void
     {
         $admin = User::factory()->admin()->create();
+        $channel = LiveChannel::factory()->create();
+        $schedule = LiveSchedule::factory()->for($channel)->create();
         $this->actingAs($admin);
 
         $longUrl = 'https://www.tiktok.com/@johengaming77/live?_d=secCgYIASAHKAESPgo8'.str_repeat('aBcD1234', 40);
 
         $this->assertGreaterThan(255, strlen($longUrl));
 
-        $response = $this->postJson('/api/admin/stream-links', [
-            'name' => 'Link Streaming Johen E-Football', 'url' => $longUrl,
-        ])->assertCreated();
+        $this->putJson('/api/admin/live-hosts/board', [
+            'assignments' => [['live_schedule_id' => $schedule->id, 'host_id' => null]],
+            'channels' => [['live_channel_id' => $channel->id, 'stream_url' => $longUrl]],
+        ])->assertOk()->assertJsonPath('data.channels.0.stream_url', $longUrl);
 
-        $this->assertSame($longUrl, $response->json('data.url'));
-        $this->assertDatabaseHas('live_stream_links', ['id' => $response->json('data.id'), 'url' => $longUrl]);
+        $this->assertDatabaseHas('live_channels', ['id' => $channel->id, 'stream_url' => $longUrl]);
     }
 
-    public function test_admin_can_upload_a_stream_link_logo(): void
+    public function test_clearing_a_channel_stream_url_leaves_the_slot_assignments_untouched(): void
     {
-        Storage::fake('public');
         $admin = User::factory()->admin()->create();
+        $channel = LiveChannel::factory()->create();
+        $schedule = LiveSchedule::factory()->for($channel)->create();
+        $host = Host::factory()->create(['name' => 'Fathan']);
         $this->actingAs($admin);
 
-        $response = $this->post('/api/admin/stream-links', [
-            'name' => 'TikTok Malam',
-            'url' => 'https://www.tiktok.com/@johen/live',
-            'logo' => UploadedFile::fake()->image('tiktok.png'),
-        ])->assertCreated();
+        $channel->update(['stream_url' => 'https://www.tiktok.com/@johen/live']);
 
-        $link = LiveStreamLink::findOrFail($response->json('data.id'));
-        $this->assertStringStartsWith('stream-links/', $link->logo);
-        Storage::disk('public')->assertExists($link->logo);
-        $this->assertSame(Storage::disk('public')->url($link->logo), $response->json('data.logo_url'));
+        $this->putJson('/api/admin/live-hosts/board', [
+            'assignments' => [['live_schedule_id' => $schedule->id, 'host_id' => $host->id]],
+            'channels' => [['live_channel_id' => $channel->id, 'stream_url' => '']],
+        ])->assertOk()
+            ->assertJsonPath('data.channels.0.stream_url', null)
+            ->assertJsonPath('data.channels.0.slots.0.host_name', 'Fathan');
     }
 
     public function test_admin_birthdays_index_orders_records_by_sort_order(): void
@@ -356,9 +370,8 @@ class AdminCmsFeatureTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors(['name', 'sort_order']);
 
         $this->putJson('/api/admin/live-hosts/board', [
-            'date' => 'bad-date',
             'assignments' => [['live_schedule_id' => 987654, 'host_id' => 123]],
-        ])->assertUnprocessable()->assertJsonValidationErrors(['date', 'assignments.0.live_schedule_id', 'assignments.0.host_id']);
+        ])->assertUnprocessable()->assertJsonValidationErrors(['assignments.0.live_schedule_id', 'assignments.0.host_id']);
 
         $this->postJson('/api/admin/achievements', [
             'employee_name' => 'Nadia', 'division' => 'Ops', 'title' => 'Top',
@@ -411,18 +424,19 @@ class AdminCmsFeatureTest extends TestCase
         $admin = User::factory()->admin()->create();
         $channel = LiveChannel::factory()->create();
         $schedule = LiveSchedule::factory()->for($channel)->create();
-        $inactiveSchedule = LiveSchedule::factory()->for($channel)->create(['start_time' => '12:00:00', 'end_time' => '15:00:00']);
+        $secondSchedule = LiveSchedule::factory()->for($channel)->create(['start_time' => '12:00:00', 'end_time' => '15:00:00']);
+        $inactiveSchedule = LiveSchedule::factory()->for($channel)->create(['start_time' => '15:00:00', 'end_time' => '18:00:00']);
         $host = Host::factory()->create();
         Promotion::factory()->create();
         Promotion::factory()->create(['is_active' => false]);
         Achievement::factory()->create();
-        LiveHost::factory()->for($schedule)->for($host)->create(['date' => today()]);
-        LiveHost::factory()->for($inactiveSchedule)->for($host)->create(['date' => today(), 'is_active' => false]);
-        LiveHost::factory()->for($schedule)->for($host)->create(['date' => today()->subDay()]);
+        LiveHost::factory()->for($schedule)->for($host)->create();
+        LiveHost::factory()->for($secondSchedule)->for($host)->create();
+        LiveHost::factory()->for($inactiveSchedule)->for($host)->create(['is_active' => false]);
         Birthday::factory()->create(['birth_date' => '1990-09-30']);
 
         $this->actingAs($admin)->getJson('/api/admin/dashboard')->assertOk()
             ->assertJsonPath('data.active_promotions', 1)->assertJsonPath('data.active_achievements', 1)
-            ->assertJsonPath('data.today_hosts', 1)->assertJsonPath('data.today_birthdays', 1);
+            ->assertJsonPath('data.assigned_hosts', 2)->assertJsonPath('data.today_birthdays', 1);
     }
 }

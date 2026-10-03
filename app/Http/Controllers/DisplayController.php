@@ -51,11 +51,7 @@ class DisplayController extends Controller
 
         $assignments = LiveHost::query()
             ->where('is_active', true)
-            ->whereDate('date', $today)
-            ->with([
-                'host:id,name,photo',
-                'liveStreamLink' => fn ($query) => $query->where('is_active', true)->select(['id', 'name', 'url', 'logo']),
-            ])
+            ->with('host:id,name,photo')
             ->get()
             ->keyBy('live_schedule_id');
 
@@ -66,27 +62,29 @@ class DisplayController extends Controller
             ->orderBy('name')
             ->with(['liveSchedules' => fn ($query) => $query->orderBy('sort_order')])
             ->get()
-            ->map(fn (LiveChannel $channel): array => [
-                'id' => $channel->id,
-                'name' => $channel->name,
-                'logo_url' => $channel->logo ? Storage::disk('public')->url($channel->logo) : null,
-                'slots' => $channel->liveSchedules->map(function (LiveSchedule $schedule) use ($assignments): array {
-                    $assignment = $assignments->get($schedule->id);
-                    $host = $assignment?->host;
-                    $link = $assignment?->liveStreamLink;
+            ->map(function (LiveChannel $channel) use ($assignments): array {
+                $streamLogoUrl = $channel->stream_logo ? Storage::disk('public')->url($channel->stream_logo) : null;
 
-                    return [
-                        'id' => $schedule->id,
-                        'start_time' => substr((string) $schedule->start_time, 0, 5),
-                        'end_time' => substr((string) $schedule->end_time, 0, 5),
-                        'host_name' => $host?->name,
-                        'host_photo' => $host?->photo ? Storage::disk('public')->url($host->photo) : null,
-                        'stream_link_name' => $link?->name,
-                        'stream_link_url' => $link?->url,
-                        'stream_link_logo_url' => $link?->logo ? Storage::disk('public')->url($link->logo) : null,
-                    ];
-                })->all(),
-            ]);
+                return [
+                    'id' => $channel->id,
+                    'name' => $channel->name,
+                    'logo_url' => $channel->logo ? Storage::disk('public')->url($channel->logo) : null,
+                    'slots' => $channel->liveSchedules->map(function (LiveSchedule $schedule) use ($assignments, $channel, $streamLogoUrl): array {
+                        $host = $assignments->get($schedule->id)?->host;
+
+                        return [
+                            'id' => $schedule->id,
+                            'start_time' => substr((string) $schedule->start_time, 0, 5),
+                            'end_time' => substr((string) $schedule->end_time, 0, 5),
+                            'host_name' => $host?->name,
+                            'host_photo' => $host?->photo ? Storage::disk('public')->url($host->photo) : null,
+                            'stream_link_name' => $channel->name,
+                            'stream_link_url' => $channel->stream_url,
+                            'stream_link_logo_url' => $streamLogoUrl,
+                        ];
+                    })->all(),
+                ];
+            });
 
         $birthdays = Birthday::query()
             ->where('is_active', true)

@@ -239,7 +239,7 @@ GET        /api/admin/dashboard
 GET|PUT    /api/admin/live-hosts/board
 ```
 
-`{resource}` adalah salah satu dari: `promotions`, `achievements`, `birthdays`, `hosts`, `channels`, `weekly-meetings`, `stream-links`.
+`{resource}` adalah salah satu dari: `promotions`, `achievements`, `birthdays`, `hosts`, `channels`, `weekly-meetings`.
 
 ### Upload gambar
 
@@ -250,7 +250,7 @@ Batas dan format gambar berbeda per resource:
 | Promosi | `image` | JPG, JPEG, PNG, WebP, **GIF** | **50 MB** |
 | Achievement, Birthday | `image` | JPG, JPEG, PNG, WebP | 5 MB |
 | Host, Weekly Meeting | `photo` | JPG, JPEG, PNG, WebP | 5 MB |
-| Channel, Stream Link | `logo` | JPG, JPEG, PNG, WebP | 5 MB |
+| Channel, Logo streaming | `logo`, `stream_logo` | JPG, JPEG, PNG, WebP | 5 MB |
 
 GIF hanya diterima untuk banner promosi karena itulah satu-satunya gambar yang ditampilkan dalam ukuran besar dengan animasi yang memang dilihat. Foto, avatar, dan logo tidak memperoleh manfaat dari GIF, jadi tetap dibatasi 5 MB supaya CMS tidak menyimpan berkas besar tanpa perlu.
 
@@ -258,9 +258,9 @@ Aplikasi tidak melakukan resize maupun re-encode, sehingga animasi GIF sampai ke
 
 > Batas ini tidak berlaku bila `php.ini` masih restrictive — lihat [Batas upload PHP](#5-batas-upload-php).
 
-### Link streaming Host Live
+### Jadwal Host Live dan link streaming
 
-Menu **Link Streaming** (`/admin/stream-links`) menyimpan daftar link statis (misal 3–4 link TikTok per channel). Di **Jadwal Host Live**, setiap slot punya dropdown kedua untuk memilih link mana yang aktif pada tanggal tersebut; dropdown link baru aktif setelah slot diisi host. Display publik menampilkan teks **Link Live Tiktok** yang hyperlink ke URL tersebut beserta QR code yang di-generate di sisi browser dari URL itu.
+Menu **Jadwal Host Live** (`/admin/live-hosts`) tidak memakai tanggal: satu slot jadwal berlaku **setiap hari** dan hanya bisa dipegang satu host. Tiap channel punya satu **link streaming** (URL + logo) yang dipakai otomatis oleh seluruh slot channel tersebut, jadi display publik menampilkan teks **Link Live Tiktok** yang hyperlink ke URL itu beserta QR code yang di-generate di sisi browser. Kosongkan URL untuk menonaktifkan link tanpa menghapus host yang sudah terjadwal.
 
 ---
 

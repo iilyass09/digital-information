@@ -8,7 +8,6 @@ use App\Models\Host;
 use App\Models\LiveChannel;
 use App\Models\LiveHost;
 use App\Models\LiveSchedule;
-use App\Models\LiveStreamLink;
 use App\Models\Promotion;
 use App\Models\WeeklyMeeting;
 use Database\Seeders\LiveChannelSeeder;
@@ -25,11 +24,16 @@ class DisplayApiTest extends TestCase
     public function test_public_display_api_returns_only_active_content_relevant_today(): void
     {
         $this->travelTo(now()->setDate(2026, 9, 30)->startOfDay());
-        $channel = LiveChannel::factory()->create(['name' => 'Johen PUBG', 'logo' => 'channels/logo.png']);
+        $channel = LiveChannel::factory()->create([
+            'name' => 'Johen PUBG',
+            'logo' => 'channels/logo.png',
+            'stream_url' => 'https://www.tiktok.com/@johen/live',
+            'stream_logo' => 'live-channels/tiktok.png',
+        ]);
         $host = Host::factory()->create(['name' => 'Host hari ini', 'photo' => 'hosts/host.jpg']);
         $activeSlot = LiveSchedule::factory()->for($channel)->create(['start_time' => '09:00:00', 'end_time' => '10:00:00', 'sort_order' => 1]);
         $inactiveSlot = LiveSchedule::factory()->for($channel)->create(['start_time' => '10:00:00', 'end_time' => '11:00:00', 'sort_order' => 2]);
-        $yesterdaySlot = LiveSchedule::factory()->for($channel)->create(['start_time' => '11:00:00', 'end_time' => '12:00:00', 'sort_order' => 3]);
+        LiveSchedule::factory()->for($channel)->create(['start_time' => '11:00:00', 'end_time' => '12:00:00', 'sort_order' => 3]);
 
         Promotion::factory()->create(['title' => 'Promo tanpa periode', 'start_date' => null, 'end_date' => null, 'sort_order' => 1]);
         Promotion::factory()->create(['title' => 'Promo aktif', 'start_date' => '2026-09-01', 'end_date' => '2026-09-30', 'sort_order' => 2]);
@@ -40,18 +44,11 @@ class DisplayApiTest extends TestCase
         Achievement::factory()->create(['employee_name' => 'Ayu', 'is_active' => true]);
         Achievement::factory()->create(['employee_name' => 'Bima', 'is_active' => false]);
 
-        $streamLink = LiveStreamLink::factory()->create([
-            'name' => 'TikTok Siang',
-            'url' => 'https://www.tiktok.com/@johen/live',
-            'logo' => 'stream-links/tiktok.png',
-        ]);
-
-        LiveHost::factory()->for($activeSlot)->for($host)->create(['date' => '2026-09-30', 'live_stream_link_id' => $streamLink->id]);
-        LiveHost::factory()->for($inactiveSlot)->for($host)->create(['date' => '2026-09-30', 'is_active' => false]);
-        LiveHost::factory()->for($yesterdaySlot)->for($host)->create(['date' => '2026-09-29']);
+        LiveHost::factory()->for($activeSlot)->for($host)->create();
+        LiveHost::factory()->for($inactiveSlot)->for($host)->create(['is_active' => false]);
         $inactiveChannel = LiveChannel::factory()->create(['is_active' => false]);
         $inactiveSchedule = LiveSchedule::factory()->for($inactiveChannel)->create();
-        LiveHost::factory()->for($inactiveSchedule)->for($host)->create(['date' => '2026-09-30']);
+        LiveHost::factory()->for($inactiveSchedule)->for($host)->create();
 
         Birthday::factory()->create(['employee_name' => 'Dina', 'birth_date' => '1994-09-30']);
         Birthday::factory()->create(['employee_name' => 'Eko', 'birth_date' => '1990-09-30']);
@@ -73,18 +70,40 @@ class DisplayApiTest extends TestCase
             ->assertJsonPath('data.live_channels.0.slots.0.host_photo', Storage::disk('public')->url('hosts/host.jpg'))
             ->assertJsonPath('data.live_channels.0.slots.0.start_time', '09:00')
             ->assertJsonPath('data.live_channels.0.slots.0.end_time', '10:00')
-            ->assertJsonPath('data.live_channels.0.slots.0.stream_link_name', 'TikTok Siang')
+            ->assertJsonPath('data.live_channels.0.slots.0.stream_link_name', 'Johen PUBG')
             ->assertJsonPath('data.live_channels.0.slots.0.stream_link_url', 'https://www.tiktok.com/@johen/live')
-            ->assertJsonPath('data.live_channels.0.slots.0.stream_link_logo_url', Storage::disk('public')->url('stream-links/tiktok.png'))
+            ->assertJsonPath('data.live_channels.0.slots.0.stream_link_logo_url', Storage::disk('public')->url('live-channels/tiktok.png'))
             ->assertJsonPath('data.live_channels.0.slots.1.host_name', null)
             ->assertJsonPath('data.live_channels.0.slots.1.host_photo', null)
-            ->assertJsonPath('data.live_channels.0.slots.1.stream_link_url', null)
+            ->assertJsonPath('data.live_channels.0.slots.1.stream_link_url', 'https://www.tiktok.com/@johen/live')
             ->assertJsonPath('data.live_channels.0.slots.2.host_name', null)
+            ->assertJsonPath('data.live_channels.0.slots.2.stream_link_url', 'https://www.tiktok.com/@johen/live')
             ->assertJsonCount(2, 'data.birthdays')
             ->assertJsonPath('data.birthdays.0.employee_name', 'Dina')
             ->assertJsonPath('data.birthdays.1.employee_name', 'Eko')
             ->assertJsonMissingPath('data.promotions.0.created_at')
             ->assertJsonMissingPath('data.live_channels.0.slots.0.live_schedule_id');
+    }
+
+    public function test_recurring_schedule_and_channel_link_show_up_on_every_day(): void
+    {
+        $channel = LiveChannel::factory()->create(['stream_url' => 'https://www.tiktok.com/@johen/live']);
+        $schedule = LiveSchedule::factory()->for($channel)->create(['start_time' => '09:00:00', 'end_time' => '10:00:00']);
+        $host = Host::factory()->create(['name' => 'Fathan']);
+        LiveHost::factory()->for($schedule)->for($host)->create();
+
+        $assertVisible = fn (): TestResponse => $this->getJson('/api/display')->assertOk()
+            ->assertJsonPath('data.live_channels.0.slots.0.host_name', 'Fathan')
+            ->assertJsonPath('data.live_channels.0.slots.0.stream_link_url', 'https://www.tiktok.com/@johen/live');
+
+        $this->travelTo(now()->setDate(2026, 9, 29)->startOfDay());
+        $assertVisible();
+
+        $this->travelTo(now()->setDate(2026, 12, 24)->startOfDay());
+        $assertVisible();
+
+        $this->travelTo(now()->setDate(2027, 1, 1)->startOfDay());
+        $assertVisible();
     }
 
     public function test_public_display_api_includes_all_eight_seeded_active_channels(): void

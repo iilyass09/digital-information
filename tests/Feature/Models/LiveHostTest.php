@@ -12,14 +12,14 @@ class LiveHostTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
-    public function test_assignment_belongs_to_a_schedule_and_a_host_and_casts_its_date(): void
+    public function test_assignment_belongs_to_a_schedule_and_a_host_and_casts_its_active_flag(): void
     {
         $schedule = LiveSchedule::factory()->create();
         $host = Host::factory()->create(['name' => 'Host Contoh']);
-        $assignment = LiveHost::factory()->for($schedule)->for($host)->create(['date' => '2026-09-30']);
+        $assignment = LiveHost::factory()->for($schedule)->for($host)->create();
 
         $this->assertTrue($assignment->liveSchedule->is($schedule));
         $this->assertTrue($assignment->host->is($host));
-        $this->assertSame('2026-09-30', $assignment->date->toDateString());
+        $this->assertTrue($assignment->is_active);
     }
 }

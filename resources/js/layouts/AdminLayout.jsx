@@ -22,7 +22,6 @@ const groups = [
         links: [
             ['Channel Live', '/admin/channels'],
             ['Daftar Host', '/admin/hosts'],
-            ['Link Streaming', '/admin/stream-links'],
             ['Jadwal Host Live', '/admin/live-hosts'],
         ],
     },

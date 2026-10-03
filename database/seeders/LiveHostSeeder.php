@@ -22,17 +22,15 @@ class LiveHostSeeder extends Seeder
             'Monkey PUBG' => ['Georde', 'Rasendria', 'Yayan', 'Raiya'],
         ];
 
-        $date = today()->toDateString();
-
-        LiveChannel::query()->orderBy('sort_order')->each(function (LiveChannel $channel) use ($roster, $date): void {
+        LiveChannel::query()->orderBy('sort_order')->each(function (LiveChannel $channel) use ($roster): void {
             $names = $roster[$channel->name] ?? [];
 
             $channel->liveSchedules()->orderBy('sort_order')->get()
-                ->each(function ($schedule, $index) use ($names, $date): void {
+                ->each(function ($schedule, $index) use ($names): void {
                     $host = isset($names[$index]) ? Host::query()->where('name', $names[$index])->first() : null;
 
                     LiveHost::updateOrCreate(
-                        ['live_schedule_id' => $schedule->id, 'date' => $date],
+                        ['live_schedule_id' => $schedule->id],
                         ['host_id' => $host?->id, 'is_active' => true],
                     );
                 });

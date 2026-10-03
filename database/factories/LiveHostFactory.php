@@ -19,7 +19,6 @@ class LiveHostFactory extends Factory
         return [
             'live_schedule_id' => LiveSchedule::factory(),
             'host_id' => Host::factory(),
-            'date' => today(),
             'is_active' => true,
         ];
     }
